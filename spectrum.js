@@ -118,7 +118,9 @@
                         "<div class='sp-alpha'><div class='sp-alpha-inner'><div class='sp-alpha-handle'></div></div></div>",
                     "</div>",
                     "<div class='sp-input-container sp-cf'>",
-                        "<input class='sp-input' type='text' spellcheck='false'  />",
+                        "<input class='sp-input' type='text' spellcheck='false' />",
+                        "<input class='sp-color-input' type='text' spellcheck='false'  />",
+                        "<input class='sp-alpha-input' type='text' spellcheck='false'  />",
                     "</div>",
                     "<div class='sp-initial sp-thumb sp-cf'></div>",
                     "<div class='sp-button-container sp-cf'>",
@@ -220,6 +222,8 @@
             alphaSlider = container.find(".sp-alpha"),
             alphaSlideHelper = container.find(".sp-alpha-handle"),
             textInput = container.find(".sp-input"),
+            colorInput = container.find(".sp-color-input"),
+            alphaInput = container.find(".sp-alpha-input"),
             paletteContainer = container.find(".sp-palette"),
             initialColorContainer = container.find(".sp-initial"),
             cancelButton = container.find(".sp-cancel"),
@@ -324,17 +328,71 @@
             container.click(stopPropagation);
 
             // Handle user typed input
-            textInput.change(setFromTextInput);
+            textInput.change(function(){
+                setFromTextInput();
+            });
             textInput.on("paste", function () {
                 setTimeout(setFromTextInput, 1);
             });
             textInput.keydown(function (e) { if (e.keyCode == 13) { setFromTextInput(); } });
 
+            //Handle user typed/pasted color input 
+            colorInput.change(function() {
+                var color = tinycolor($(this).val());
+                var alpha = alphaInput.val();
+                color._a = alpha;
+                color._roundA = alpha;
+
+                textInput
+                    .val(color.toRgbString())
+                    .trigger("change");
+            });
+            colorInput.on("paste", function () {
+                setTimeout(function() {
+                    textInput
+                        .val($(this).val())
+                        .trigger("change");
+                }, 1);
+            });
+
+            //handle user typed/pasted alpha input
+            alphaInput.change(function() {
+                var color = tinycolor(textInput.val());
+                color._a = Number($(this).val());
+                color._roundA = $(this).val();
+
+                textInput
+                        .val(color.toRgbString())
+                        .trigger("change");
+            });
+            alphaInput.on("paste", function(e) {
+                setTimeout(function() {
+                    color = tinycolor(textInput.val());
+                    color._a = $(this).val();
+                    color._roundA = $(this).val();
+
+                    textInput
+                        .val(color.toRgbString())
+                        .trigger("change");
+                    //set(color, false);
+                }, 1); 
+            });
+
             cancelButton.text(opts.cancelText);
             cancelButton.on("click.spectrum", function (e) {
                 e.stopPropagation();
                 e.preventDefault();
-                revert();
+
+                //Because we forced to change element color on 
+                //move event, logic for cancel button is different
+                //from one in revert()
+                if (e.currentTarget.className === "sp-cancel") {
+                    updateInputOnCancel(true);
+                    set(colorOnShow, true);
+                } else {
+                    revert();
+                }
+
                 hide();
             });
 
@@ -727,7 +785,7 @@
                 h: currentHue,
                 s: currentSaturation,
                 v: currentValue,
-                a: Math.round(currentAlpha * 1000) / 1000
+                a: Math.round(currentAlpha * 10) / 10
             }, { format: opts.format || currentPreferredFormat });
         }
 
@@ -809,6 +867,8 @@
             // Update the text entry input as it changes happen
             if (opts.showInput) {
                 textInput.val(displayColor);
+                colorInput.val(get().toHexString());
+                alphaInput.val(get()._a);
             }
 
             if (opts.showPalette) {
@@ -871,16 +931,36 @@
             if (color) {
                 displayColor = color.toString(currentPreferredFormat);
                 // Update the selection palette with the current color
-                addColorToSelectionPalette(color);
+                //addColorToSelectionPalette(color);
             }
+
+            if (isInput) {
+                boundElement.val(displayColor);
+                colorInput.val(color.toHexString());
+                alphaInput.val(color._a);
+            }
+
+            if (fireCallback && hasChanged) {
+                callbacks.change(color);
+                boundElement.trigger('change', [ color ]);
+                colorInput.trigger('change', [ color.toHexString() ]);
+                alphaInput.trigger('change', [ color._a ]);
+            }
+        }
+
+        function updateInputOnCancel(fireCallback) {
+            var color = get(),
+                displayColor = '',
+                hasChanged = !tinycolor.equals(color, colorOnShow);
 
             if (isInput) {
                 boundElement.val(displayColor);
             }
 
             if (fireCallback && hasChanged) {
-                callbacks.change(color);
-                boundElement.trigger('change', [ color ]);
+                callbacks.change(colorOnShow);
+                boundElement.val(colorOnShow);
+                boundElement.change();
             }
         }
 
